@@ -14,7 +14,7 @@ int main(int argc, char* argv[]) {
 	SetConsoleOutputCP(CP_UTF7);
 
 	if (argc != 6) {
-		puts("[html/css/js] -in \"Fichier à optimiser.css\" -out \"Fichier optimisé.css\"");
+		puts("[html/css/js] -in \"Fichier Ã  optimiser.css\" -out \"Fichier optimisÃ©.css\"");
 		Exit(1);
 	}
 
@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
 		synthaxType = SYNTHAX_TYPE_JS;
 	}
 	else {
-		puts("Langage non spécifié.");
+		puts("Langage non spÃ©cifiÃ©.");
 		Exit(-1);
 	}
 
@@ -59,37 +59,37 @@ int main(int argc, char* argv[]) {
 	HANDLE hInputFile = CreateFileA(szInputFile, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, NULL, NULL);
 	if (hInputFile == INVALID_HANDLE_VALUE) {
 		GetErrorString(szInputFile);
-		printf("Erreur lors de l'ouverture du fichier à optimiser: %s\n", szInputFile);
+		printf("Erreur lors de l'ouverture du fichier Ã  optimiser: %s\n", szInputFile);
 		Exit(2);
 	}
 
 	HANDLE hOutputFile = CreateFileA(szOutputFile, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, NULL, NULL);
 	if (hOutputFile == INVALID_HANDLE_VALUE) {
 		GetErrorString(szInputFile);
-		printf("Erreur lors de la création du fichier optimisé: %s\n", szInputFile);
+		printf("Erreur lors de la crÃ©ation du fichier optimisÃ©: %s\n", szInputFile);
 		Exit(2);
 	}
 
 	LARGE_INTEGER li;
 	GetFileSizeEx(hInputFile, &li);
 	if (li.QuadPart > 104857600) {
-		puts("La taille du fichier source ne doit pas dépasser 100Mo.");
+		puts("La taille du fichier source ne doit pas dÃ©passer 100Mo.");
 		Exit(3);
 	}
 	DWORD dw, dwFileSize = li.QuadPart;
 	LPSTR lpFileBuffer = (LPSTR)malloc(dwFileSize);
 	if (lpFileBuffer == NULL) {
-		puts("Erreur lors de l'allocation de la mémoire.");
+		puts("Erreur lors de l'allocation de la mÃ©moire.");
 		Exit(4);
 	}
 	if (!ReadFile(hInputFile, lpFileBuffer, dwFileSize, &dw, NULL)) {
 		GetErrorString(szInputFile);
-		printf("Erreur lors de la lecture du fichier à optimiser: %s\n", szInputFile);
+		printf("Erreur lors de la lecture du fichier Ã  optimiser: %s\n", szInputFile);
 		Exit(5);
 	}
 	LPSTR lpOutFileBuffer = (LPSTR)malloc(dwFileSize);
 	if (lpOutFileBuffer == NULL) {
-		puts("Erreur lors de l'allocation de la mémoire.");
+		puts("Erreur lors de l'allocation de la mÃ©moire.");
 		Exit(6);
 	}
 	ReplaceAllChars(lpFileBuffer, '\t', ' ');
@@ -146,7 +146,7 @@ int main(int argc, char* argv[]) {
 
 	if (!WriteFile(hOutputFile, lpOutFileBuffer, dwOutIndex, &dw, NULL)) {
 		GetErrorString(szInputFile);
-		printf("Erreur lors de la lecture du fichier à optimiser: %s\n", szInputFile);
+		printf("Erreur lors de la lecture du fichier Ã  optimiser: %s\n", szInputFile);
 		Exit(7);
 	}
 
