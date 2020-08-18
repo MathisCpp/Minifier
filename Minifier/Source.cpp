@@ -1,5 +1,5 @@
 #include <Windows.h>
-#include "..\..\..\..\Desktop\Mathis\Code\headers\utils.h"
+#include "utils.h"
 
 #define SYNTHAX_TYPE_HTML 1
 #define SYNTHAX_TYPE_CSS 2
