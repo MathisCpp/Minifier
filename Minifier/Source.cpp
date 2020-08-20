@@ -1,9 +1,9 @@
 #include <Windows.h>
-#include "..\..\..\..\Desktop\Mathis\Code\headers\utils.h"
+#include "utils.h"
 
-#define SYNTHAX_TYPE_HTML 1
-#define SYNTHAX_TYPE_CSS 2
-#define SYNTHAX_TYPE_JS 3
+#define LANGAGE_HTML 1
+#define LANGAGE_CSS 2
+#define LANGAGE_JS 3
 
 void Exit(DWORD dwExitCode);
 void GetErrorString(LPSTR lpszError);
@@ -14,24 +14,31 @@ int main(int argc, char* argv[]) {
 	SetConsoleOutputCP(CP_UTF7);
 
 	if (argc != 6) {
+		if (argc == 2) {
+			if (Equal(argv[1], "--version")) {
+				puts(__DATE__);
+				Exit(0);
+			}
+		}
 		puts("[html/css/js] -in \"Fichier à optimiser.css\" -out \"Fichier optimisé.css\"");
 		Exit(1);
 	}
 
-	byte synthaxType = 0;
+
+	byte langage = 0;
 	char szInputFile[PATH_BUFFER_SIZE];
 	char szOutputFile[PATH_BUFFER_SIZE];
 	char szArgLower[5];
 	memcpy(szArgLower, argv[1], 5);
 	ToLower(szArgLower);
 	if (Equal(szArgLower, "html")) {
-		synthaxType = SYNTHAX_TYPE_HTML;
+		langage = LANGAGE_HTML;
 	}
 	else if (Equal(szArgLower, "css")) {
-		synthaxType = SYNTHAX_TYPE_CSS;
+		langage = LANGAGE_CSS;
 	}
 	else if (Equal(szArgLower, "js")) {
-		synthaxType = SYNTHAX_TYPE_JS;
+		langage = LANGAGE_JS;
 	}
 	else {
 		puts("Langage non spécifié.");
@@ -94,99 +101,98 @@ int main(int argc, char* argv[]) {
 	}
 	ReplaceAllChars(lpFileBuffer, '\t', ' ');
 	DWORD dwOutIndex = 0;
-	char lastChar;		// Garde une trace du dernier caractère écrit
+	char lastChar = 0;		// Garde une trace du dernier caractère écrit
 
+	if (langage == LANGAGE_CSS) goto CSS; else if (langage == LANGAGE_JS) goto JS;
+
+
+HTML:
 	for (DWORD i = 0; i < dwFileSize; i++) {
-		if (lpFileBuffer[i] != '\n' && lpFileBuffer[i] != '\r') {
-			switch (synthaxType) {
-			case SYNTHAX_TYPE_HTML: {
+	HTML_loop:
 
-				lpOutFileBuffer[dwOutIndex] = lpFileBuffer[i];
-				lastChar = lpOutFileBuffer[dwOutIndex];
-				dwOutIndex++;
+		if (lpFileBuffer[i] == '\n' || lpFileBuffer[i] == '\r') continue;
 
+		lpOutFileBuffer[dwOutIndex] = lpFileBuffer[i];
+		lastChar = lpOutFileBuffer[dwOutIndex];
+		dwOutIndex++;
 
-				break;
+	}
+	goto end;
+
+CSS:
+	for (DWORD i = 0; i < dwFileSize; i++) {
+	CSS_loop:
+
+		if (lpFileBuffer[i] == '\n' || lpFileBuffer[i] == '\r') continue;
+
+		if (IsBadChar(lpFileBuffer[i])) {
+			DWORD dwSpaces = 1;
+			while (IsBadChar(lpFileBuffer[i + dwSpaces]))
+				dwSpaces++;
+			register char after = lpFileBuffer[i + dwSpaces];
+			if (after == '{' || after == ':' || after == ';' || after == ',' || after == '/') {		// Supprime les espaces avant
+				i += dwSpaces;
 			}
-		parseCSS:
-			case SYNTHAX_TYPE_CSS: {
-
-				
-				if (IsBadChar(lpFileBuffer[i])) {
-					DWORD dwSpaces = 1;
-					while (IsBadChar(lpFileBuffer[i + dwSpaces]))
-						dwSpaces++;
-					register char after = lpFileBuffer[i + dwSpaces];
-					if (after == '{' || after == ':' || after == ';' || after == ',' || after == '/') {		// Supprime les espaces avant
-						i += dwSpaces;
-					}
-					else if (dwSpaces > 1) {	// Remplace les suites de plusieurs espaces par un seul
-						i += dwSpaces - 1;
-						lpFileBuffer[i] = ' ';
-					}
-				}
-
-
-				if (lpFileBuffer[i] == '/') {
-
-					if (lpFileBuffer[i + 1] == '*') {
-						i += 2;
-						while (lpFileBuffer[i] != '*' || lpFileBuffer[i + 1] != '/')	// Skip les commentaires
-							i++;
-						i += 2;
-						while (IsBadChar(lpFileBuffer[i])) i++;
-						goto parseCSS;
-					}
-				}
-
-
-				if (lpFileBuffer[i] == '}') {
-					if (lastChar == ';') {
-						dwOutIndex--;
-					}
-					else if (lastChar == '{') {
-						i++;
-						while (lpOutFileBuffer[dwOutIndex != 0 ? dwOutIndex - 1 : 0] != '}' && dwOutIndex != 0) {	// Supprime les règles vides
-							dwOutIndex--;
-						}
-						goto parseCSS;
-					}
-				}
-
-
-				lpOutFileBuffer[dwOutIndex] = lpFileBuffer[i];
-				lastChar = lpOutFileBuffer[dwOutIndex];
-				dwOutIndex++;
-
-				if (lpFileBuffer[i] == '{' || lpFileBuffer[i] == '}' || lpFileBuffer[i] == ':' || lpFileBuffer[i] == ';' || lpFileBuffer[i] == ',' || lpFileBuffer[i] == '/') {
-					while (IsBadChar(lpFileBuffer[i + 1])) i++;
-					/*if (lpFileBuffer[i] == '/' && lpFileBuffer[i + 1] == '*') {
-						i += 2;
-						while (lpFileBuffer[i] != '*' || lpFileBuffer[i + 1] != '/')	// Skip les commentaires
-							i++;
-						i += 2;
-						while (IsBadChar(lpFileBuffer[i + 1])) i++;
-						
-					}*/
-				}
-
-				
-				break;
+			else if (dwSpaces > 1) {	// Remplace les suites de plusieurs espaces par un seul
+				i += dwSpaces - 1;
+				lpFileBuffer[i] = ' ';
 			}
-			case SYNTHAX_TYPE_JS: {
+		}
 
-				lpOutFileBuffer[dwOutIndex] = lpFileBuffer[i];
-				lastChar = lpOutFileBuffer[dwOutIndex];
-				dwOutIndex++;
+		if (lpFileBuffer[i] == '/') {
 
-				break;
+			if (lpFileBuffer[i + 1] == '*') {
+				i += 2;
+				while (lpFileBuffer[i] != '*' || lpFileBuffer[i + 1] != '/')	// Skip les commentaires
+					i++;
+				i += 2;
+				while (IsBadChar(lpFileBuffer[i])) i++;
+				goto CSS_loop;
 			}
+		}
+
+		if (lpFileBuffer[i] == '}') {
+			if (lastChar == ';') {
+				dwOutIndex--;
 			}
-			
-			continue;
+			else if (lastChar == '{') {
+				i++;
+				while (lpOutFileBuffer[dwOutIndex != 0 ? dwOutIndex - 1 : 0] != '}' && dwOutIndex != 0) {	// Supprime les règles vides
+					dwOutIndex--;
+				}
+				goto CSS_loop;
+			}
+		}
+
+		if (lastChar == '{') while (IsBadChar(lpFileBuffer[i])) i++;
+
+
+		lpOutFileBuffer[dwOutIndex] = lpFileBuffer[i];
+		lastChar = lpOutFileBuffer[dwOutIndex];
+		dwOutIndex++;
+
+		if (lpFileBuffer[i] == '{' || lpFileBuffer[i] == '}' || lpFileBuffer[i] == ':' || lpFileBuffer[i] == ';' || lpFileBuffer[i] == ',') {
+			while (IsBadChar(lpFileBuffer[i + 1])) i++;
 		}
 	}
+	goto end;
+	
 
+JS:
+	for (DWORD i = 0; i < dwFileSize; i++) {
+	JS_loop:
+
+		if (lpFileBuffer[i] == '\n' || lpFileBuffer[i] == '\r') continue;
+
+		lpOutFileBuffer[dwOutIndex] = lpFileBuffer[i];
+		lastChar = lpOutFileBuffer[dwOutIndex];
+		dwOutIndex++;
+
+	}
+
+
+
+end:
 	LPSTR lpOutFilePtr = lpOutFileBuffer;
 	if (*lpOutFileBuffer == ' ') {	// Supprime l'espace au début du fichier
 		lpOutFilePtr++;
