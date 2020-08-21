@@ -1,5 +1,5 @@
 #include <Windows.h>
-#include "utils.h"
+#include "..\..\..\..\Desktop\Mathis\Code\headers\utils.h"
 
 #define LANGAGE_HTML 1
 #define LANGAGE_CSS 2
@@ -95,7 +95,6 @@ int main(int argc, char* argv[]) {
 		puts("Erreur lors de l'allocation de la mémoire.");
 		Exit(4);
 	}
-	printf("dwFileSize: %lu\n", dwFileSize);
 	if (!ReadFile(hInputFile, lpFileBuffer, dwFileSize, &dw, NULL)) {
 		GetErrorString(szInputFile);
 		printf("Erreur lors de la lecture du fichier à optimiser: %s\n", szInputFile);
@@ -128,11 +127,10 @@ HTML:
 CSS:
 	for (DWORD i = 0; i < dwFileSize; i++) {
 	CSS_loop:
-		if (lpFileBuffer[i] == '\n' || lpFileBuffer[i] == '\r') continue;
+		//if (lpFileBuffer[i] == '\n' || lpFileBuffer[i] == '\r') continue;
 
-		if (IsBadChar(lpFileBuffer[i])) {
-			DWORD dwSpaces = 0;
-			dwSpaces = 1;
+		if (/*lpFileBuffer[i] == ' '*/IsBadChar(lpFileBuffer[i])) {
+			DWORD dwSpaces = 1;
 			while (IsBadChar(lpFileBuffer[i + dwSpaces])) {
 				dwSpaces++;
 			}
@@ -187,6 +185,10 @@ CSS:
 			}
 		}
 
+		if (lpFileBuffer[i] == '\n' || lpFileBuffer[i] == '\r') {
+			printf("newline\ni = %lu\n", i);
+			goto CSS_loop;
+		}
 
 		if (i >= dwFileSize) {
 			goto end;
