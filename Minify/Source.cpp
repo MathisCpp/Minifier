@@ -1,5 +1,5 @@
 #include <Windows.h>
-#include "..\..\..\..\Desktop\Mathis\Code\headers\utils.h"
+#include "utils.h"
 
 #define LANGAGE_HTML 1
 #define LANGAGE_CSS 2
@@ -127,16 +127,18 @@ HTML:
 CSS:
 	for (DWORD i = 0; i < dwFileSize; i++) {
 	CSS_loop:
-		//if (lpFileBuffer[i] == '\n' || lpFileBuffer[i] == '\r') continue;
 
-		if (/*lpFileBuffer[i] == ' '*/IsBadChar(lpFileBuffer[i])) {
+		if (IsBadChar(lpFileBuffer[i])) {
 			DWORD dwSpaces = 1;
 			while (IsBadChar(lpFileBuffer[i + dwSpaces])) {
 				dwSpaces++;
 			}
-
+			if (lpFileBuffer[i + dwSpaces] == '/' || lpFileBuffer[i + dwSpaces + 1] == '*') {	// Supprime les commentaires récursivement
+				i += dwSpaces;
+				goto CSS_parse_comment;
+			}
 			register char after = lpFileBuffer[i + dwSpaces];
-			if (after == '{' || after == ':' || after == ';' || after == ',') {		// Supprime les espaces avant
+			if (after == '{' || after == '}' || after == '(' || after == ')' || after == ':' || after == ';' || after == ',' || (lastChar == ':' || lastChar == ';' && after != ' ')) {		// Supprime les espaces avant ces caractères
 				if (dwOutIndex && lastChar == ' ') dwOutIndex--;
 				i += dwSpaces;
 			}
@@ -145,13 +147,13 @@ CSS:
 				lpFileBuffer[i] = ' ';
 			}
 		}
-	CSS_check_comment:
+	CSS_parse_comment:
 		
 		if (lpFileBuffer[i] == '/') {
 
 			if (lpFileBuffer[i + 1] == '*') {
 				i += 2;
-				while (lpFileBuffer[i] != '*' || lpFileBuffer[i + 1] != '/')	// Skip les commentaires
+				while (lpFileBuffer[i] != '*' || lpFileBuffer[i + 1] != '/' && i < dwFileSize)	// Skip les commentaires
 					i++;
 				i += 2;
 				goto CSS_loop;
@@ -171,7 +173,7 @@ CSS:
 			}
 		}
 
-		if (lastChar == '{') {
+		if (lastChar == '{' || lastChar == '}') {
 			while (IsBadChar(lpFileBuffer[i])) i++;
 		}
 		
@@ -185,11 +187,6 @@ CSS:
 			}
 		}
 
-		if (lpFileBuffer[i] == '\n' || lpFileBuffer[i] == '\r') {
-			printf("newline\ni = %lu\n", i);
-			goto CSS_loop;
-		}
-
 		if (i >= dwFileSize) {
 			goto end;
 		}
@@ -197,8 +194,8 @@ CSS:
 		lpOutFileBuffer[dwOutIndex] = lpFileBuffer[i];
 		lastChar = lpOutFileBuffer[dwOutIndex];
 		dwOutIndex++;
-
-		if (lpFileBuffer[i] == '{' || lpFileBuffer[i] == '}' || lpFileBuffer[i] == ':' || lpFileBuffer[i] == ';' || lpFileBuffer[i] == ',') {
+		
+		if (lpFileBuffer[i] == '{' || lpFileBuffer[i] == '}' || lpFileBuffer[i] == '(' || lpFileBuffer[i] == ':' || lpFileBuffer[i] == ';' || lpFileBuffer[i] == ',') {
 			while (IsBadChar(lpFileBuffer[i + 1]) || lpFileBuffer[i] == '/') {
 
 				if (lpFileBuffer[i] == '/' && lpFileBuffer[i + 1] == '*') {
@@ -209,7 +206,6 @@ CSS:
 				}
 				i++;
 			}
-			//while (IsBadChar(lpFileBuffer[i + 1])) i++;
 		}
 	}
 	goto end;
@@ -230,11 +226,8 @@ JS:
 
 end:
 	LPSTR lpOutFilePtr = lpOutFileBuffer;
-	if (*lpOutFileBuffer == ' ' || lpOutFileBuffer[dwOutIndex - 1] == ' ') {	// Supprime l'espace au début ou à la fin du fichier
-		if (*lpOutFileBuffer == ' ')
-			lpOutFilePtr++; dwOutIndex--;
-		if (dwOutIndex)
-			dwOutIndex--;
+	if (*lpOutFileBuffer == ' ') {	// Supprime l'espace au début du fichier
+		lpOutFileBuffer++;
 	}
 	
 	if (!WriteFile(hOutputFile, lpOutFilePtr, dwOutIndex, &dw, NULL)) {
