@@ -1,5 +1,5 @@
 #include <Windows.h>
-#include "utils.h"
+#include "..\..\..\..\Desktop\Mathis\Code\headers\utils.h"
 
 #define LANGAGE_HTML 1
 #define LANGAGE_CSS 2
@@ -173,7 +173,7 @@ CSS:
 			}
 		}
 
-		if (lastChar == '{' || lastChar == '}') {
+		if (lastChar == '{' || lastChar == '}' || lastChar == '[' || lastChar == '(') {
 			while (IsBadChar(lpFileBuffer[i])) i++;
 		}
 		
@@ -201,7 +201,7 @@ CSS:
 
 				if (lpFileBuffer[i] == '/' && lpFileBuffer[i + 1] == '*') {
 					i += 2;
-					while (lpFileBuffer[i] != '*' || lpFileBuffer[i + 1] != '/')
+					while (lpFileBuffer[i] != '*' || lpFileBuffer[i + 1] != '/' && i < dwFileSize)
 						i++;
 					i += 2;
 				}
@@ -226,9 +226,12 @@ JS:
 	
 
 end:
+
+	free(lpFileBuffer);
+
 	LPSTR lpOutFilePtr = lpOutFileBuffer;
 	if (*lpOutFileBuffer == ' ') {	// Supprime l'espace au début du fichier
-		lpOutFileBuffer++;
+		lpOutFilePtr++;
 	}
 	
 	if (!WriteFile(hOutputFile, lpOutFilePtr, dwOutIndex, &dw, NULL)) {
@@ -237,7 +240,6 @@ end:
 		Exit(7);
 	}
 
-	free(lpFileBuffer);
 	free(lpOutFileBuffer);
 	if (!bQuietMode)
 		printf("Avant: %lu\nAprès:  %lu\n%lu octets supprimés.\n", dwFileSize, dwOutIndex, dwFileSize - dwOutIndex);
