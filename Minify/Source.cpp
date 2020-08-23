@@ -137,8 +137,8 @@ CSS:
 				i += dwSpaces;
 				goto CSS_parse_comment;
 			}
-			register char after = lpFileBuffer[i + dwSpaces];
-			if (after == '{' || after == '}' || after == '(' || after == ')' || after == ':' || after == ';' || after == ',' || (lastChar == ':' || lastChar == ';' && after != ' ')) {		// Supprime les espaces avant ces caractères
+			register char next = lpFileBuffer[i + dwSpaces];
+			if (next == '{' || next == '}' || next == '(' || next == ')' || next == ']' || next == '=' || next == ':' || next == ';' || next == ',' || next == '\'' || next == '\"' || (lastChar == ':' || lastChar == ';' && next != ' ')) {		// Supprime les espaces avant ces caractères
 				if (dwOutIndex && lastChar == ' ') dwOutIndex--;
 				i += dwSpaces;
 			}
@@ -195,7 +195,8 @@ CSS:
 		lastChar = lpOutFileBuffer[dwOutIndex];
 		dwOutIndex++;
 		
-		if (lpFileBuffer[i] == '{' || lpFileBuffer[i] == '}' || lpFileBuffer[i] == '(' || lpFileBuffer[i] == ':' || lpFileBuffer[i] == ';' || lpFileBuffer[i] == ',') {
+		register char next = lpFileBuffer[i];
+		if (next == '{' || next == '}' || next == '(' || next == '[' || next == '=' || next == ':' || next == ';' || next == ',' || next == '\'' || next == '\"') {
 			while (IsBadChar(lpFileBuffer[i + 1]) || lpFileBuffer[i] == '/') {
 
 				if (lpFileBuffer[i] == '/' && lpFileBuffer[i + 1] == '*') {
