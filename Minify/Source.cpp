@@ -1,5 +1,5 @@
 #include <Windows.h>
-#include "utils.h"
+#include "..\..\..\..\Desktop\Mathis\Code\headers\utils.h"
 
 #define LANGAGE_HTML 1
 #define LANGAGE_CSS 2
@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
 		langage = LANGAGE_JS;
 	}
 	else {
-		puts("Langage non spÃ©cifiÃ©.");
+		puts("Langage non spécifié.");
 		Exit(-1);
 	}
 
@@ -72,50 +72,134 @@ int main(int argc, char* argv[]) {
 	HANDLE hInputFile = CreateFileA(szInputFile, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (hInputFile == INVALID_HANDLE_VALUE) {
 		GetErrorString(szInputFile);
-		printf("Erreur lors de l'ouverture du fichier Ã  optimiser: %s\n", szInputFile);
+		printf("Erreur lors de l'ouverture du fichier à optimiser: %s\n", szInputFile);
 		Exit(2);
 	}
 
 	HANDLE hOutputFile = CreateFileA(szOutputFile, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (hOutputFile == INVALID_HANDLE_VALUE) {
 		GetErrorString(szInputFile);
-		printf("Erreur lors de la crÃ©ation du fichier optimisÃ©: %s\n", szInputFile);
+		printf("Erreur lors de la création du fichier optimisé: %s\n", szInputFile);
 		Exit(2);
 	}
 
 	LARGE_INTEGER li;
 	GetFileSizeEx(hInputFile, &li);
 	if (li.QuadPart > 104857600) {
-		puts("La taille du fichier source ne doit pas dÃ©passer 100Mo.");
+		puts("La taille du fichier source ne doit pas dépasser 100Mo.");
 		Exit(3);
 	}
 	DWORD dw, dwFileSize = li.QuadPart;
 	LPSTR lpFileBuffer = (LPSTR)malloc(dwFileSize);
 	if (lpFileBuffer == NULL) {
-		puts("Erreur lors de l'allocation de la mÃ©moire.");
+		puts("Erreur lors de l'allocation de la mémoire.");
 		Exit(4);
 	}
 	if (!ReadFile(hInputFile, lpFileBuffer, dwFileSize, &dw, NULL)) {
 		GetErrorString(szInputFile);
-		printf("Erreur lors de la lecture du fichier Ã  optimiser: %s\n", szInputFile);
+		printf("Erreur lors de la lecture du fichier à optimiser: %s\n", szInputFile);
 		Exit(5);
 	}
 	LPSTR lpOutFileBuffer = (LPSTR)malloc(dwFileSize);
 	if (lpOutFileBuffer == NULL) {
-		puts("Erreur lors de l'allocation de la mÃ©moire.");
+		puts("Erreur lors de l'allocation de la mémoire.");
 		Exit(6);
 	}
 	ReplaceAllChars(lpFileBuffer, '\t', ' ');
 	DWORD dwOutIndex = 0;
-	char lastChar = 0;		// Garde une trace du dernier caractÃ¨re Ã©crit
+	char lastChar = 0;		// Garde une trace du dernier caractère écrit
 
 	if (langage == LANGAGE_CSS) goto CSS; else if (langage == LANGAGE_JS) goto JS;
 
 
 HTML:
+	char szLastTag[11];
+	bool inTag, inCloseTag, inQuotes, inDoubleQuotes;
+	inTag = false;
+	inCloseTag = false;
+	inQuotes = false;
+	inDoubleQuotes = false;
+
+
 	for (DWORD i = 0; i < dwFileSize; i++) {
 	HTML_loop:
-		if (lpFileBuffer[i] == '\n' || lpFileBuffer[i] == '\r') continue;
+
+		if (IsBadChar(lpFileBuffer[i])) {
+			DWORD dwSpaces = 1;
+			while (IsBadChar(lpFileBuffer[i + dwSpaces])) {
+				dwSpaces++;
+			}
+			if (Equal(lpFileBuffer + i + dwSpaces, "<!--", 4)) {	// Supprime les commentaires récursivement
+				i += dwSpaces;
+				goto HTML_parse_comment;
+			}
+			register char next = lpFileBuffer[i + dwSpaces];
+			if (next == '<' || next == '>' || next == '/') {		// Supprime les espaces avant ces caractères
+				if (dwOutIndex && lastChar == ' ') dwOutIndex--;
+				i += dwSpaces;
+			}
+			else if (dwSpaces > 1) {	// Remplace les suites de plusieurs espaces par un seul
+				i += dwSpaces - 1;
+				lpFileBuffer[i] = ' ';
+			}
+		}
+
+	HTML_parse_comment:
+
+		if (Equal(lpFileBuffer + i, "<!--", 4)) {
+
+			i += 4;
+			while (!Equal(lpFileBuffer + i, "-->", 3) && i < dwFileSize)	// Skip les commentaires
+				i++;
+			i += 3;
+			goto HTML_loop;
+			
+		}
+
+		if (lpFileBuffer[i] == '<') {
+			if (inTag || inCloseTag) {
+				puts("Erreur: ouverture d'une balise dans uune autre déjà ouverte.");
+				Exit(502);
+			}
+			if (lpFileBuffer[i + 1] != '/') {
+				byte lastTagIndex = 0;
+				while (lpFileBuffer[i + lastTagIndex + 1] != ' ' && lpFileBuffer[i + lastTagIndex + 1] != '>') {
+					if (lastTagIndex >= 11) {
+						printf("Tag HTML trop long: %.11s\n", szLastTag);
+						Exit(500);
+					}
+
+					szLastTag[lastTagIndex++] = lpFileBuffer[i + lastTagIndex + 1];
+				}
+				szLastTag[lastTagIndex] = 0;
+				puts(szLastTag);
+				inTag = true;
+			}
+			else
+				inCloseTag = true;
+		}
+		
+
+		if (lpFileBuffer[i] == '>') {
+			if (!inTag && !inCloseTag) {
+				printf("Erreur: fermeture de balise alors qu'aucune est ouverte.");
+				Exit(501);
+			}
+			inTag = false;
+			inCloseTag = false;
+			goto HTML_loop;
+		}
+
+		if (lpFileBuffer[i] == '\'') {
+			inQuotes = !inQuotes;
+		}
+		else if (lpFileBuffer[i] == '\"') {
+			inDoubleQuotes = !inDoubleQuotes;
+		}
+
+		if (i >= dwFileSize) {
+			goto end;
+		}
 
 		lpOutFileBuffer[dwOutIndex] = lpFileBuffer[i];
 		lastChar = lpOutFileBuffer[dwOutIndex];
@@ -133,12 +217,12 @@ CSS:
 			while (IsBadChar(lpFileBuffer[i + dwSpaces])) {
 				dwSpaces++;
 			}
-			if (lpFileBuffer[i + dwSpaces] == '/' || lpFileBuffer[i + dwSpaces + 1] == '*') {	// Supprime les commentaires rÃ©cursivement
+			if (lpFileBuffer[i + dwSpaces] == '/' || lpFileBuffer[i + dwSpaces + 1] == '*') {	// Supprime les commentaires récursivement
 				i += dwSpaces;
 				goto CSS_parse_comment;
 			}
 			register char next = lpFileBuffer[i + dwSpaces];
-			if (next == '{' || next == '}' || next == '(' || next == ')' || next == ']' || next == '=' || next == ':' || next == ';' || next == ',' || next == '\'' || next == '\"' || (lastChar == ':' || lastChar == ';' && next != ' ')) {		// Supprime les espaces avant ces caractÃ¨res
+			if (next == '{' || next == '}' || next == '(' || next == ')' || next == ']' || next == '=' || next == ':' || next == ';' || next == ',' || next == '\'' || next == '\"' || (lastChar == ':' || lastChar == ';' && next != ' ')) {		// Supprime les espaces avant ces caractères
 				if (dwOutIndex && lastChar == ' ') dwOutIndex--;
 				i += dwSpaces;
 			}
@@ -164,7 +248,7 @@ CSS:
 			if (lastChar == ';') {
 				dwOutIndex--;
 			}
-			else if (lastChar == '{') {		// Supprime les rÃ¨gles vides
+			else if (lastChar == '{') {		// Supprime les règles vides
 				i++;
 				while (lpOutFileBuffer[dwOutIndex ? dwOutIndex - 1 : 0] != '}' && dwOutIndex) {
 					dwOutIndex--;
@@ -230,7 +314,7 @@ end:
 	free(lpFileBuffer);
 
 	LPSTR lpOutFilePtr = lpOutFileBuffer;
-	if (*lpOutFileBuffer == ' ') {	// Supprime l'espace au dÃ©but du fichier
+	if (*lpOutFileBuffer == ' ') {	// Supprime l'espace au début du fichier
 		lpOutFilePtr++;
 	}
 	
@@ -242,7 +326,7 @@ end:
 
 	free(lpOutFileBuffer);
 	if (!bQuietMode)
-		printf("Avant: %lu\nAprÃ¨s:  %lu\n%lu octets supprimÃ©s.\n", dwFileSize, dwOutIndex, dwFileSize - dwOutIndex);
+		printf("Avant: %lu\nAprès:  %lu\n%lu octets supprimés.\n", dwFileSize, dwOutIndex, dwFileSize - dwOutIndex);
 	Exit(0);
 }
 
