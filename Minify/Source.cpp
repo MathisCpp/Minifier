@@ -1,5 +1,5 @@
 #include <Windows.h>
-#include "utils.h"
+#include "..\..\..\..\Desktop\Mathis\Code\headers\utils.h"
 
 #define LANGAGE_HTML 1
 #define LANGAGE_CSS 2
@@ -8,7 +8,9 @@
 void Exit(DWORD dwExitCode);
 void GetErrorString(LPSTR lpszError);
 bool IsBadChar(char ch);
+bool IsSpecialChar(char ch);
 
+const char specialChars[] = { '\'','\"',',',';',':','{','}','(',')','[',']',' ','#','!','/' };
 
 int main(int argc, char* argv[]) {
 
@@ -21,7 +23,7 @@ int main(int argc, char* argv[]) {
 				Exit(0);
 			}
 		}
-		printf("%s [html/css/js] -in input_file -out output_file\n", argv[0]);
+		printf("%s --langage [html/css/js] --in input_file --out output_file\n", argv[0]);
 		Exit(1);
 	}
 
@@ -30,38 +32,60 @@ int main(int argc, char* argv[]) {
 	bool bQuietMode = false;
 	char szInputFile[PATH_BUFFER_SIZE];
 	char szOutputFile[PATH_BUFFER_SIZE];
-	char szArgLower[6];
-	memcpy(szArgLower, argv[1], 5);
-	ToLower(szArgLower);
-	if (Equal(szArgLower, "html")) {
-		langage = LANGAGE_HTML;
-	}
-	else if (Equal(szArgLower, "css")) {
-		langage = LANGAGE_CSS;
-	}
-	else if (Equal(szArgLower, "js")) {
-		langage = LANGAGE_JS;
-	}
-	else {
-		puts("Langage non spÃ©cifiÃ©.");
-		Exit(-1);
-	}
+	char szArgLower[11];
+	
 
-	for (int i = 2; i < argc; i++) {
-		memcpy(szArgLower, argv[i], 6);
+
+	for (int i = 1; i < argc; i++) {
+		memcpy(szArgLower, argv[i], 11);
 		ToLower(szArgLower);
 
-		if (Equal(szArgLower, "-in")) {
+		if (Equal(szArgLower, "--language")) {
+			if (langage) {
+				puts("Langage déjà spécifié.");
+				Exit(-1);
+			}
 			i++;
+			if (i == argc) {
+				puts("Langage non spécifié");
+				Exit(-1);
+			}
+			memcpy(szArgLower, argv[i], 5);
+			ToLower(szArgLower);
+			if (Equal(szArgLower, "html")) {
+				langage = LANGAGE_HTML;
+			}
+			else if (Equal(szArgLower, "css")) {
+				langage = LANGAGE_CSS;
+			}
+			else if (Equal(szArgLower, "js")) {
+				langage = LANGAGE_JS;
+			}
+			else {
+				puts("Langage non valide.");
+				Exit(-1);
+			}
+			continue;
+		}
+		if (Equal(szArgLower, "--in")) {
+			i++;
+			if (i == argc) {
+				puts("Fichier source non spécifié.");
+				Exit(-1);
+			}
 			strcpy(szInputFile, argv[i]);
 			continue;
 		}
-		if (Equal(szArgLower, "-out")) {
+		if (Equal(szArgLower, "--out")) {
 			i++;
+			if (i == argc) {
+				puts("Fichier de destination non spécifié.");
+				Exit(-1);
+			}
 			strcpy(szOutputFile, argv[i]);
 			continue;
 		}
-		if (Equal(szArgLower, "quiet")) {
+		if (Equal(szArgLower, "--quiet")) {
 			bQuietMode = true;
 			continue;
 		}
@@ -72,53 +96,53 @@ int main(int argc, char* argv[]) {
 	HANDLE hInputFile = CreateFileA(szInputFile, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (hInputFile == INVALID_HANDLE_VALUE) {
 		GetErrorString(szInputFile);
-		printf("Erreur lors de l'ouverture du fichier Ã  optimiser: %s\n", szInputFile);
+		printf("Erreur lors de l'ouverture du fichier source.\n%s", szInputFile);
 		Exit(2);
 	}
 
 	HANDLE hOutputFile = CreateFileA(szOutputFile, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (hOutputFile == INVALID_HANDLE_VALUE) {
 		GetErrorString(szInputFile);
-		printf("Erreur lors de la crÃ©ation du fichier optimisÃ©: %s\n", szInputFile);
+		printf("Erreur lors de la création du fichier de destination.\n%s", szInputFile);
 		Exit(2);
 	}
 
 	LARGE_INTEGER li;
 	GetFileSizeEx(hInputFile, &li);
 	if (li.QuadPart > 104857600) {
-		puts("La taille du fichier source ne doit pas dÃ©passer 100Mo.");
+		puts("La taille du fichier source ne doit pas dépasser 100Mo.");
 		Exit(3);
 	}
 	DWORD dw, dwFileSize = li.QuadPart;
 	LPSTR lpFileBuffer = (LPSTR)malloc(dwFileSize);
 	if (lpFileBuffer == NULL) {
-		puts("Erreur lors de l'allocation de la mÃ©moire.");
+		puts("Erreur lors de l'allocation de la mémoire.");
 		Exit(4);
 	}
 	if (!ReadFile(hInputFile, lpFileBuffer, dwFileSize, &dw, NULL)) {
 		GetErrorString(szInputFile);
-		printf("Erreur lors de la lecture du fichier Ã  optimiser: %s\n", szInputFile);
+		printf("Erreur lors de la lecture du fichier source: %s\n", szInputFile);
 		Exit(5);
 	}
 	LPSTR lpOutFileBuffer = (LPSTR)malloc(dwFileSize);
 	if (lpOutFileBuffer == NULL) {
-		puts("Erreur lors de l'allocation de la mÃ©moire.");
+		puts("Erreur lors de l'allocation de la mémoire.");
 		Exit(6);
 	}
 	ReplaceAllChars(lpFileBuffer, '\t', ' ');
-	DWORD dwOutIndex = 0;
-	char lastChar = 0;		// Garde une trace du dernier caractÃ¨re Ã©crit
+	DWORD dwOutIndex = 0, dwSkipCharsCount = 0, dwSkipCharsBeginIndex = -1;
+	char lastChar = 0;		// Garde une trace du dernier caractère écrit
+	bool inQuotes = false, inDoubleQuotes = false;
+	
 
 	if (langage == LANGAGE_CSS) goto CSS; else if (langage == LANGAGE_JS) goto JS;
 
 
 HTML:
 	char szLastTag[11];
-	bool inTag, inCloseTag, inQuotes, inDoubleQuotes;
+	bool inTag, inCloseTag;
 	inTag = false;
 	inCloseTag = false;
-	inQuotes = false;
-	inDoubleQuotes = false;
 
 
 	for (DWORD i = 0; i < dwFileSize; i++) {
@@ -129,12 +153,12 @@ HTML:
 			while (IsBadChar(lpFileBuffer[i + dwSpaces])) {
 				dwSpaces++;
 			}
-			if (Equal(lpFileBuffer + i + dwSpaces, "<!--", 4)) {	// Supprime les commentaires rÃ©cursivement
+			if (Equal(lpFileBuffer + i + dwSpaces, "<!--", 4)) {	// Supprime les commentaires récursivement
 				i += dwSpaces;
 				goto HTML_parse_comment;
 			}
 			register char next = lpFileBuffer[i + dwSpaces];
-			if (next == '<' || next == '>' || next == '/') {		// Supprime les espaces avant ces caractÃ¨res
+			if (next == '<' || next == '>' || next == '/') {		// Supprime les espaces avant ces caractères
 				if (dwOutIndex && lastChar == ' ') dwOutIndex--;
 				i += dwSpaces;
 			}
@@ -158,7 +182,7 @@ HTML:
 
 		if (lpFileBuffer[i] == '<') {
 			if (inTag || inCloseTag) {
-				puts("Erreur: ouverture d'une balise dans uune autre dÃ©jÃ  ouverte.");
+				puts("Erreur: ouverture d'une balise dans uune autre déjà ouverte.");
 				Exit(502);
 			}
 			if (lpFileBuffer[i + 1] != '/') {
@@ -209,26 +233,75 @@ HTML:
 	goto end;
 
 CSS:
+	bool inCSSRule;
+	inCSSRule = false;
+	
+
 	for (DWORD i = 0; i < dwFileSize; i++) {
-	CSS_loop:
+	CSS_loop_begin:
+
+		if (i == dwSkipCharsBeginIndex) {
+			i += dwSkipCharsCount;
+				
+			while (dwSkipCharsCount) {
+				dwSkipCharsCount--;
+			}
+			dwSkipCharsBeginIndex = -1;
+		}
 
 		if (IsBadChar(lpFileBuffer[i])) {
+		
 			DWORD dwSpaces = 1;
 			while (IsBadChar(lpFileBuffer[i + dwSpaces])) {
 				dwSpaces++;
 			}
-			if (lpFileBuffer[i + dwSpaces] == '/' || lpFileBuffer[i + dwSpaces + 1] == '*') {	// Supprime les commentaires rÃ©cursivement
+
+			bool comment = false;
+			if (lpFileBuffer[i + dwSpaces] == '/' && lpFileBuffer[i + dwSpaces + 1] == '*') {
+				comment = true;
+			}
+
+			bool loopFlag = true, isLastCharSpecial = false, isCurrentCharSpecial = false;
+			for (byte a = 0; a < sizeof specialChars; a++) {
+				if (lastChar == specialChars[a]) {
+					isLastCharSpecial = true;
+				}
+				if (lpFileBuffer[i + dwSpaces] == specialChars[a]) {
+					isCurrentCharSpecial = true;
+				}
+			}
+
+			bool fixedIdentifier = false;
+			if (!isLastCharSpecial && !isCurrentCharSpecial && !inCSSRule) {
+				DWORD dwCommentIndex = i + 1;
+				do {
+					if (IsBadChar(lpFileBuffer[dwCommentIndex]))
+						dwCommentIndex++;
+					else if (lpFileBuffer[dwCommentIndex] == '/' && lpFileBuffer[dwCommentIndex + 1] == '*') {
+						i += dwSpaces;
+						goto CSS_parse_comment;
+					}
+					else {
+						lpOutFileBuffer[dwOutIndex] = ' ';
+						dwOutIndex++;
+						lastChar = ' ';
+						i += dwSpaces;
+						loopFlag = false;
+						fixedIdentifier = true;
+						dwSpaces = 0;
+					}
+				} while (loopFlag);
+			}
+
+			if (comment) {
 				i += dwSpaces;
 				goto CSS_parse_comment;
 			}
+
 			register char next = lpFileBuffer[i + dwSpaces];
-			if (next == '{' || next == '}' || next == '(' || next == ')' || next == ']' || next == '=' || next == ':' || next == ';' || next == ',' || next == '\'' || next == '\"' || (lastChar == ':' || lastChar == ';' && next != ' ')) {		// Supprime les espaces avant ces caractÃ¨res
+			if (next == '{' || next == '}' || next == '(' || next == ')' || next == ']' || next == '=' || next == ':' || next == ';' || next == ',' || next == '\"' || next == '\'' || (lastChar == ':' || lastChar == ';' && next != ' ')) {		// Supprime les espaces avant ces caractères
 				if (dwOutIndex && lastChar == ' ') dwOutIndex--;
 				i += dwSpaces;
-			}
-			else if (dwSpaces > 1) {	// Remplace les suites de plusieurs espaces par un seul
-				i += dwSpaces - 1;
-				lpFileBuffer[i] = ' ';
 			}
 		}
 	CSS_parse_comment:
@@ -240,35 +313,129 @@ CSS:
 				while (lpFileBuffer[i] != '*' || lpFileBuffer[i + 1] != '/' && i < dwFileSize)	// Skip les commentaires
 					i++;
 				i += 2;
-				goto CSS_loop;
+				goto CSS_loop_begin;	// Supprime les espaces/newlines après le commentaire (recursif)
 			}
 		}
 
-		if (lpFileBuffer[i] == '}') {
+		if (!IsSpecialChar(lpFileBuffer[i]) && !IsSpecialChar(lastChar) && !inCSSRule && lpFileBuffer[i ? i - 1 : i] != lastChar) {
+			lpOutFileBuffer[dwOutIndex] = ' ';
+			lastChar = ' ';
+			dwOutIndex++;
+		}
+
+		else if (lpFileBuffer[i] == '}') {
+
+			if (!inCSSRule) {
+				puts("[CSS][Erreur] Fermeture d'une règle alors qu'aucune n'est ouverte.");
+				Exit(1002);
+			}
+			inCSSRule = false;
+
 			if (lastChar == ';') {
 				dwOutIndex--;
 			}
-			else if (lastChar == '{') {		// Supprime les rÃ¨gles vides
+			else if (lastChar == '{') {		// Supprime les règles vides
 				i++;
 				while (lpOutFileBuffer[dwOutIndex ? dwOutIndex - 1 : 0] != '}' && dwOutIndex) {
 					dwOutIndex--;
 				}
-				goto CSS_loop;
+				goto CSS_loop_begin;
 			}
+		}
+		
+		else if (lpFileBuffer[i] == '{') {
+			if (inCSSRule) {
+				puts("[CSS][Erreur] Ouverture d'une règle dans une règle.");
+				Exit(1001);
+			}
+			inCSSRule = true;
+		}
+
+		else if (lpFileBuffer[i] == '\"' || lpFileBuffer[i] == '\'') {
+			char quoteType = lpFileBuffer[i];
+			do {
+				if (i >= dwFileSize) {
+					goto end;
+				}
+				lpOutFileBuffer[dwOutIndex] = lpFileBuffer[i];
+				lastChar = lpOutFileBuffer[dwOutIndex];
+				dwOutIndex++;
+				i++;
+			} while (lpFileBuffer[i] != quoteType);
 		}
 
 		if (lastChar == '{' || lastChar == '}' || lastChar == '[' || lastChar == '(') {
 			while (IsBadChar(lpFileBuffer[i])) i++;
 		}
 		
-		if (lastChar == ' ') {
+		else if (lastChar == ' ') {
 			if (lpFileBuffer[i] == ' ') {
 				i++;
-				goto CSS_loop;
+				goto CSS_loop_begin;
 			}
 			if (lpFileBuffer[i] == '{' || lpFileBuffer[i] == ':' || lpFileBuffer[i] == ';' || lpFileBuffer[i] == ',') {
 				dwOutIndex--;
 			}
+		}
+
+		else if (lastChar == ':') {
+			
+			if (lpFileBuffer[i] == '0') {
+				DWORD dwZeros = 1;
+				while (lpFileBuffer[i + dwZeros] == '0') {	// Compte le nombre de '0' consécutifs
+					dwZeros++;
+				}
+				if (!IsNumber(lpFileBuffer[i + dwZeros]) || lpFileBuffer[i + dwZeros] != '.') {
+					if (lpFileBuffer[i + dwZeros] == '.') {
+						DWORD dwDecimalsAfter = dwZeros;
+						bool removeDot = true;
+
+						while (IsNumber(lpFileBuffer[i + dwDecimalsAfter])) {
+							if (lpFileBuffer[i + dwDecimalsAfter] != '0')
+								removeDot = false;
+							dwDecimalsAfter++;
+						}
+						if (removeDot)
+							dwZeros--;
+					}
+					dwZeros--;
+				}
+				
+				if (dwZeros > 1 || lpFileBuffer[i + dwZeros] == '.' || IsNumber(lpFileBuffer[i + dwZeros])) {	// Supprime les suites de plusieurs zéros inutiles
+					i += dwZeros;
+				}
+			}
+		}
+		
+		else if (lastChar == '.') {
+
+			int dwNumbersAfter = 0;
+			while (IsNumber(lpFileBuffer[i + dwNumbersAfter])) {
+				dwNumbersAfter++;
+			}
+			dwNumbersAfter--;
+			while (lpFileBuffer[i + dwNumbersAfter] == '0') {
+				dwSkipCharsCount++;
+				dwNumbersAfter--;
+			}
+			if (!IsNumber(lpFileBuffer[i + dwNumbersAfter]) && lpFileBuffer[i + dwNumbersAfter] != '.') {
+				puts("[CSS][Erreur] Absence de chiffres après un point.");
+				//Exit(-1);
+			}
+			bool removeDot = false;
+			if (dwNumbersAfter <= -1) {
+				
+				
+				i += dwSkipCharsCount;
+				
+				dwOutIndex--;
+				removeDot = true;
+				lastChar = 0;
+				goto CSS_loop_begin;
+			}
+			dwNumbersAfter++;
+			dwSkipCharsBeginIndex = i + dwNumbersAfter;
+			
 		}
 
 		if (i >= dwFileSize) {
@@ -279,8 +446,9 @@ CSS:
 		lastChar = lpOutFileBuffer[dwOutIndex];
 		dwOutIndex++;
 		
+		
 		register char next = lpFileBuffer[i];
-		if (next == '{' || next == '}' || next == '(' || next == '[' || next == '=' || next == ':' || next == ';' || next == ',' || next == '\'' || next == '\"') {
+		if (next == '{' || next == '}' || next == '(' || next == '[' || next == '=' || next == ':' || next == ';' || next == ',') {
 			while (IsBadChar(lpFileBuffer[i + 1]) || lpFileBuffer[i] == '/') {
 
 				if (lpFileBuffer[i] == '/' && lpFileBuffer[i + 1] == '*') {
@@ -314,24 +482,36 @@ end:
 	free(lpFileBuffer);
 
 	LPSTR lpOutFilePtr = lpOutFileBuffer;
-	if (*lpOutFileBuffer == ' ') {	// Supprime l'espace au dÃ©but du fichier
+	if (*lpOutFileBuffer == ' ' && dwOutIndex > 0) {	// Supprime l'espace au début du fichier
+		puts("*lpOutFileBuffer == ' '");
 		lpOutFilePtr++;
+		dwOutIndex--;
 	}
 	
 	if (!WriteFile(hOutputFile, lpOutFilePtr, dwOutIndex, &dw, NULL)) {
 		GetErrorString(szInputFile);
-		printf("WriteFile(hOutputFile, %lu): %s\n", dwOutIndex, szInputFile);
+		printf("Erreur lors de l'écriture du fichier de destination.\n%s", szInputFile);
 		Exit(7);
 	}
 
 	free(lpOutFileBuffer);
 	if (!bQuietMode)
-		printf("Avant: %lu\nAprÃ¨s:  %lu\n%lu octets supprimÃ©s.\n", dwFileSize, dwOutIndex, dwFileSize - dwOutIndex);
+		printf("Avant: %lu\nAprès:  %lu\n%lu octets supprimés.\n", dwFileSize, dwOutIndex, dwFileSize - dwOutIndex);
 	Exit(0);
 }
 
 bool IsBadChar(char ch) {
 	return (ch == ' ' || ch == '\r' || ch == '\n');
+}
+
+bool IsSpecialChar(char ch) {
+	
+	for (byte a = 0; a < sizeof specialChars; a++) {
+		if (ch == specialChars[a]) {
+			return true;
+		}
+	}
+	return false;
 }
 
 void GetErrorString(LPSTR lpszError) {
