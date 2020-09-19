@@ -1,9 +1,7 @@
 #pragma once
 
-#include <string>
+#include <string.h>
 #include <Windows.h>
-#include <fstream>
-#include <iostream>
 #include "stringUtils.h"
 
 typedef unsigned long long QWORD;
