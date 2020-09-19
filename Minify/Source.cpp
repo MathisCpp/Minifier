@@ -6,37 +6,45 @@
 #define LANGAGE_JS 3
 
 void Exit(DWORD dwExitCode);
+void PrintHelp(char* szProgramName);
 void GetErrorString(LPSTR lpszError);
 bool IsBadChar(char ch);
 bool IsSpecialChar(char ch);
 
 const char specialChars[] = { '\'','\"',',',';',':','{','}','(',')','[',']',' ','#','!','/' };
 
+
 int main(int argc, char* argv[]) {
 
 	SetConsoleOutputCP(CP_UTF7);
 
-	if (argc < 6) {
-		if (argc == 2) {
-			if (Equal(argv[1], "--version")) {
-				puts(__DATE__);
-				Exit(0);
-			}
-		}
-		printf("%s --langage [html/css/js] --in input_file --out output_file\n", argv[0]);
-		Exit(1);
+	if (argc == 1) {
+		PrintHelp(argv[0]);
 	}
+	else if (argc == 2) {
+		ToLower(argv[1]);
+		if (Equal(argv[1], "--version")) {
+			puts(__DATE__);
+			Exit(0);
+		}
+		if (Equal(argv[1], "--help")) {
+			PrintHelp(argv[0]);
+		}
+	}
+	
+	
 
 
 	byte langage = 0;
-	bool bQuietMode = false;
+	bool bQuietMode = false, inFileSet = false, outFileSet = false;
 	char szInputFile[PATH_BUFFER_SIZE];
 	char szOutputFile[PATH_BUFFER_SIZE];
-	char szArgLower[11];
+	
 	
 
 
 	for (int i = 1; i < argc; i++) {
+		char szArgLower[11];
 		memcpy(szArgLower, argv[i], 11);
 		ToLower(szArgLower);
 
@@ -45,10 +53,9 @@ int main(int argc, char* argv[]) {
 				puts("Langage déjà spécifié.");
 				Exit(-1);
 			}
-			i++;
-			if (i == argc) {
-				puts("Langage non spécifié");
-				Exit(-1);
+
+			if (++i == argc) {
+				break;
 			}
 			memcpy(szArgLower, argv[i], 5);
 			ToLower(szArgLower);
@@ -68,29 +75,55 @@ int main(int argc, char* argv[]) {
 			continue;
 		}
 		if (Equal(szArgLower, "--in")) {
-			i++;
-			if (i == argc) {
-				puts("Fichier source non spécifié.");
-				Exit(-1);
+			if (inFileSet) {
+				puts("Fichier d'entrée déjà spécifié.");
+				Exit(1);
+			}
+
+			if (++i == argc) {
+				break;
 			}
 			strcpy(szInputFile, argv[i]);
+			inFileSet = true;
 			continue;
 		}
 		if (Equal(szArgLower, "--out")) {
-			i++;
-			if (i == argc) {
-				puts("Fichier de destination non spécifié.");
-				Exit(-1);
+			if (outFileSet) {
+				puts("Fichier de sortie déjà spécifié.");
+				Exit(1);
+			}
+
+			if (++i == argc) {
+				break;
 			}
 			strcpy(szOutputFile, argv[i]);
+			outFileSet = true;
 			continue;
 		}
 		if (Equal(szArgLower, "--quiet")) {
+			if (bQuietMode) {
+				puts("Mode silencieux déjà activé.");
+				Exit(1);
+			}
+
 			bQuietMode = true;
 			continue;
 		}
-		printf("argc = %d\nargv[%d] = %s\n", argc, i, argv[i]);
+		printf("Argument non reconnu: \"%s\"\n", argv[i]);
 		Exit(-1);
+	}
+
+	if (langage == 0) {
+		puts("Langage non spécifié.");
+		Exit(1);
+	}
+	else if (!inFileSet) {
+		puts("Fichier d'entrée non spécifié.");
+		Exit(1);
+	}
+	else if (!outFileSet) {
+		puts("Fichier de sortie non spécifié.");
+		Exit(1);
 	}
 
 	HANDLE hInputFile = CreateFileA(szInputFile, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -198,6 +231,10 @@ HTML:
 				szLastTag[lastTagIndex] = 0;
 				puts(szLastTag);
 				inTag = true;
+
+				if (Equal(szLastTag, "style")) {
+					// Récupérer le style, compter le nombre de caractères et le minifier
+				}
 			}
 			else
 				inCloseTag = true;
@@ -310,10 +347,15 @@ CSS:
 
 			if (lpFileBuffer[i + 1] == '*') {
 				i += 2;
-				while (lpFileBuffer[i] != '*' || lpFileBuffer[i + 1] != '/' && i < dwFileSize)	// Skip les commentaires
+				while (lpFileBuffer[i] != '*' || lpFileBuffer[i + 1] != '/') {	// Skip les commentaires
+					if (i >= dwFileSize) {
+						puts("[CSS][Erreur] Terminaison de commentaire attendue.");
+						Exit(-1);
+					}
 					i++;
+				}
 				i += 2;
-				goto CSS_loop_begin;	// Supprime les espaces/newlines après le commentaire (recursif)
+				goto CSS_loop_begin;	// Supprime les espaces/newlines après le commentaire
 			}
 		}
 
@@ -339,6 +381,7 @@ CSS:
 				while (lpOutFileBuffer[dwOutIndex ? dwOutIndex - 1 : 0] != '}' && dwOutIndex) {
 					dwOutIndex--;
 				}
+				lastChar = '}';
 				goto CSS_loop_begin;
 			}
 		}
@@ -378,27 +421,33 @@ CSS:
 			}
 		}
 
-		else if (lastChar == ':') {
+		else if (lastChar == ':' && inCSSRule) {
 			
 			if (lpFileBuffer[i] == '0') {
-				DWORD dwZeros = 1;
-				while (lpFileBuffer[i + dwZeros] == '0') {	// Compte le nombre de '0' consécutifs
-					dwZeros++;
+				DWORD dwZeros = 1, dwNumbers = 1;
+				
+				while (IsNumber(lpFileBuffer[i + dwNumbers])) {	// Compte le nombre de '0' consécutifs
+					if (lpFileBuffer[i + dwZeros] == '0') {
+						dwZeros++;
+					}
+					dwNumbers++;
 				}
-				if (!IsNumber(lpFileBuffer[i + dwZeros]) || lpFileBuffer[i + dwZeros] != '.') {
-					if (lpFileBuffer[i + dwZeros] == '.') {
-						DWORD dwDecimalsAfter = dwZeros;
-						bool removeDot = true;
+				
+				if (!IsNumber(lpFileBuffer[i + dwZeros])) {
+					if (lpFileBuffer[i + dwNumbers] == '.') {
+						DWORD dwDecimalsAfter = dwNumbers + 1;
+						bool removeDot = false;
 
 						while (IsNumber(lpFileBuffer[i + dwDecimalsAfter])) {
-							if (lpFileBuffer[i + dwDecimalsAfter] != '0')
+							if (lpFileBuffer[i + dwDecimalsAfter] != '0') {
 								removeDot = false;
+							}
 							dwDecimalsAfter++;
 						}
-						if (removeDot)
-							dwZeros--;
+						
+						dwZeros -= removeDot;	// Enlève les 0 devant les points
 					}
-					dwZeros--;
+					else dwZeros--;		// Décrémentation du compteur pour laisser au moins un 0
 				}
 				
 				if (dwZeros > 1 || lpFileBuffer[i + dwZeros] == '.' || IsNumber(lpFileBuffer[i + dwZeros])) {	// Supprime les suites de plusieurs zéros inutiles
@@ -407,35 +456,45 @@ CSS:
 			}
 		}
 		
-		else if (lastChar == '.') {
+		else if (lastChar == '.' && inCSSRule) {
 
 			int dwNumbersAfter = 0;
 			while (IsNumber(lpFileBuffer[i + dwNumbersAfter])) {
+				if (lpFileBuffer[i + dwNumbersAfter] != '0') {
+
+				}
 				dwNumbersAfter++;
 			}
+			if (dwNumbersAfter == 0) {
+				puts("[CSS][Erreur] Absence de chiffres après un point.");
+				Exit(-1);
+			}
+
 			dwNumbersAfter--;
 			while (lpFileBuffer[i + dwNumbersAfter] == '0') {
 				dwSkipCharsCount++;
 				dwNumbersAfter--;
 			}
-			if (!IsNumber(lpFileBuffer[i + dwNumbersAfter]) && lpFileBuffer[i + dwNumbersAfter] != '.') {
-				puts("[CSS][Erreur] Absence de chiffres après un point.");
-				//Exit(-1);
-			}
-			bool removeDot = false;
+			
 			if (dwNumbersAfter <= -1) {
-				
 				
 				i += dwSkipCharsCount;
 				
-				dwOutIndex--;
-				removeDot = true;
-				lastChar = 0;
+				lpOutFileBuffer[dwOutIndex - 1] = '0';
+
+				lastChar = '0';
 				goto CSS_loop_begin;
 			}
 			dwNumbersAfter++;
 			dwSkipCharsBeginIndex = i + dwNumbersAfter;
 			
+		}
+
+		else if (lpFileBuffer[i] == '.' && !inCSSRule) {
+			if (lastChar != '}' && lastChar != 0) {
+				puts("[CSS][Erreur] Espace avant un identificateur de classe.");
+				Exit(20);
+			}
 		}
 
 		if (i >= dwFileSize) {
@@ -517,10 +576,15 @@ bool IsSpecialChar(char ch) {
 void GetErrorString(LPSTR lpszError) {
 	DWORD dwError = GetLastError();
 	DWORD dwMessageLength = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, dwError, LANG_USER_DEFAULT, lpszError, 261, NULL);
-	if (dwMessageLength == 0) {
+	if (!dwMessageLength) {
 		_ultoa(dwError, lpszError, 10);
 	}
 	return;
+}
+
+void PrintHelp(char* szProgramName) {
+	printf("%s --langage [html/css/js] --in input_file --out output_file\n", szProgramName);
+	Exit(1);
 }
 
 void Exit(DWORD dwExitCode) {
